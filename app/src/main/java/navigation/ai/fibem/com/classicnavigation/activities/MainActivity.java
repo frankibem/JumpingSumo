@@ -4,8 +4,10 @@ import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.InputDevice;
 import android.view.MotionEvent;
+import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -15,11 +17,21 @@ import com.parrot.arsdk.arcontroller.ARControllerCodec;
 import com.parrot.arsdk.arcontroller.ARFrame;
 import com.parrot.arsdk.ardiscovery.ARDiscoveryDeviceService;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+
+import java.io.IOException;
+
 import navigation.ai.fibem.com.classicnavigation.R;
+import navigation.ai.fibem.com.classicnavigation.data.MotionData;
+import navigation.ai.fibem.com.classicnavigation.data.MotionRecorder;
+import navigation.ai.fibem.com.classicnavigation.data.Observable;
+import navigation.ai.fibem.com.classicnavigation.data.Observer;
 import navigation.ai.fibem.com.classicnavigation.drone.JSDrone;
 import navigation.ai.fibem.com.classicnavigation.view.JSVideoView;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Observer {
     private static final String TAG = "JSActivity";
     private JSDrone mJSDrone;
 
@@ -34,6 +46,10 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_TURN_SPEED = 30;
     private static final int MAX_FORWARD_SPEED = 50;
 
+    private MotionData motionData;
+    MotionRecorder recorder;
+    private boolean recording = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -45,7 +61,11 @@ public class MainActivity extends AppCompatActivity {
         mJSDrone = new JSDrone(this, service);
         mJSDrone.addListener(mJSListener);
 
-        initIHM();
+        motionData = new MotionData();
+        motionData.addObserver(this);
+        recorder = new MotionRecorder();
+
+        initControls();
     }
 
     @Override
@@ -67,6 +87,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_1_0, this, mLoaderCallback);
+        } else {
+            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
+    }
+
+    @Override
     public void onBackPressed() {
         if (mJSDrone != null) {
             mConnectionProgressDialog = new ProgressDialog(this);
@@ -80,15 +112,27 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void initIHM() {
+    private void initControls() {
         mVideoView = (JSVideoView) findViewById(R.id.videoView);
-
-        // TODO: Set up start/stop button click listener
         mStartStopBtn = (Button) findViewById(R.id.btn_startStop);
-
         mBatteryLabel = (TextView) findViewById(R.id.txt_battery);
         mTurnSpeedLabel = (TextView) findViewById(R.id.txt_turnSpeed);
         mForwardSpeedLabel = (TextView) findViewById(R.id.txt_forwardSpeed);
+
+        mStartStopBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (recording) {
+                    // Stop recording
+                    recording = false;
+                    recorder.reset();
+                    mStartStopBtn.setText("START");
+                } else {
+                    recording = true;
+                    mStartStopBtn.setText("STOP");
+                }
+            }
+        });
     }
 
     private final JSDrone.Listener mJSListener = new JSDrone.Listener() {
@@ -125,7 +169,20 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public void onFrameReceived(ARFrame frame) {
-            mVideoView.displayFrame(frame);
+            final byte[] data = mVideoView.displayFrame(frame);
+
+            if (recording) {
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            recorder.record(motionData.copy(), data);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }).start();
+            }
         }
 
         @Override
@@ -193,9 +250,7 @@ public class MainActivity extends AppCompatActivity {
             mJSDrone.setFlag((byte) 1);
         }
 
-        // Update labels
-        mTurnSpeedLabel.setText(Byte.toString(turnSpeed));
-        mForwardSpeedLabel.setText(Byte.toString(forwardSpeed));
+        motionData.updateMotion(forwardSpeed, turnSpeed);
     }
 
     private static float getCenteredAxis(MotionEvent event, InputDevice device, int axis, int historyPos) {
@@ -219,4 +274,26 @@ public class MainActivity extends AppCompatActivity {
         }
         return 0;
     }
+
+    @Override
+    public void update(Observable observable) {
+        mTurnSpeedLabel.setText(Byte.toString(motionData.getTurnSpeed()));
+        mForwardSpeedLabel.setText(Byte.toString(motionData.getForwardSpeed()));
+    }
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS: {
+                    Log.i("OpenCV", "OpenCV loaded successfully");
+                }
+                break;
+                default: {
+                    super.onManagerConnected(status);
+                }
+                break;
+            }
+        }
+    };
 }

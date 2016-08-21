@@ -42,7 +42,7 @@ public class JSVideoView extends ImageView {
         setScaleType(ScaleType.CENTER_CROP);
     }
 
-    public void displayFrame(ARFrame frame) {
+    public byte[] displayFrame(ARFrame frame) {
         byte[] data = frame.getByteData();
         synchronized (this) {
             mBmp = BitmapFactory.decodeByteArray(data, 0, data.length);
@@ -56,5 +56,7 @@ public class JSVideoView extends ImageView {
                 }
             }
         });
+
+        return data;
     }
 }
