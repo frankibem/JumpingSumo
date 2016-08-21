@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">ClassicNavigation</string>
+    <string name="app_name">Navigator</string>
+    <string name="settings">Settings</string>
 </resources>
