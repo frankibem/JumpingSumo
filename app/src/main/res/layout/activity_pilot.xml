@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".activities.MainActivity">
+    tools:context="navigation.ai.fibem.com.classicnavigation.activities.PilotActivity">
 
     <navigation.ai.fibem.com.classicnavigation.view.JSVideoView
         android:id="@+id/videoView"

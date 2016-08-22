@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".activities.TrainActivity">
+
+    <navigation.ai.fibem.com.classicnavigation.view.JSVideoView
+        android:id="@+id/videoView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <RelativeLayout
+        android:layout_width="200dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_margin="@dimen/activity_horizontal_margin"
+        android:background="@drawable/rounded_corner"
+        android:padding="@dimen/activity_horizontal_margin">
+
+        <TextView
+            android:id="@+id/label_battery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Battery: "
+            android:textColor="@color/primary_text" />
+
+        <TextView
+            android:id="@+id/txt_battery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toRightOf="@id/label_battery"
+            android:textColor="@color/primary_text"
+            tools:text="50%" />
+
+        <TextView
+            android:id="@+id/label_turnSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_battery"
+            android:text="Turn speed: "
+            android:textColor="@color/primary_text" />
+
+        <TextView
+            android:id="@+id/txt_turnSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_battery"
+            android:layout_toRightOf="@id/label_turnSpeed"
+            android:textColor="@color/primary_text"
+            tools:text="43" />
+
+        <TextView
+            android:id="@+id/label_forwardSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_turnSpeed"
+            android:text="Forward speed: "
+            android:textColor="@color/primary_text" />
+
+        <TextView
+            android:id="@+id/txt_forwardSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_turnSpeed"
+            android:layout_toRightOf="@id/label_forwardSpeed"
+            android:textColor="@color/primary_text"
+            tools:text="-17" />
+
+    </RelativeLayout>
+
+    <Button
+        android:id="@+id/btn_startStop"
+        android:layout_width="100dp"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_centerHorizontal="true"
+        android:layout_marginBottom="@dimen/activity_vertical_margin"
+        android:text="Start"
+        android:textSize="20sp" />
+
+</RelativeLayout>

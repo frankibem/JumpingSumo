@@ -1,7 +1,9 @@
 package navigation.ai.fibem.com.classicnavigation.activities;
 
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -56,11 +58,10 @@ public class DeviceListActivity extends AppCompatActivity {
                 ARDISCOVERY_PRODUCT_ENUM product = ARDiscoveryService.getProductFromProductID(service.getProductID());
                 switch (product) {
                     case ARDISCOVERY_PRODUCT_ARDRONE:
-
                     case ARDISCOVERY_PRODUCT_JS:
                     case ARDISCOVERY_PRODUCT_JS_EVO_LIGHT:
                     case ARDISCOVERY_PRODUCT_JS_EVO_RACE:
-                        intent = new Intent(DeviceListActivity.this, MainActivity.class);
+                        intent = trainOrPilot();
                         break;
 
                     default:
@@ -77,7 +78,6 @@ public class DeviceListActivity extends AppCompatActivity {
         mDroneDiscoverer = new DroneDiscoverer(this);
     }
 
-    @Override
     protected void onResume() {
         super.onResume();
 
@@ -97,6 +97,33 @@ public class DeviceListActivity extends AppCompatActivity {
         mDroneDiscoverer.stopDiscovering();
         mDroneDiscoverer.cleanup();
         mDroneDiscoverer.removeListener(mDiscovererListener);
+    }
+
+    /**
+     * Determines if to train or pilot drone
+     *
+     * @return
+     */
+    private Intent trainOrPilot() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(DeviceListActivity.this);
+        builder.setMessage("What would you like to do?")
+                .setTitle("Pick an activity");
+
+        final Intent intent = new Intent();
+        builder.setPositiveButton("AutoPilot", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                intent.setClass(DeviceListActivity.this, PilotActivity.class);
+            }
+        });
+        builder.setNegativeButton("Train", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                intent.setClass(DeviceListActivity.this, TrainActivity.class);
+            }
+        });
+
+        return intent;
     }
 
     private final DroneDiscoverer.Listener mDiscovererListener = new DroneDiscoverer.Listener() {
@@ -151,5 +178,4 @@ public class DeviceListActivity extends AppCompatActivity {
             return rowView;
         }
     };
-
 }

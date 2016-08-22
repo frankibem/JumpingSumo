@@ -31,7 +31,7 @@ import navigation.ai.fibem.com.classicnavigation.data.Observer;
 import navigation.ai.fibem.com.classicnavigation.drone.JSDrone;
 import navigation.ai.fibem.com.classicnavigation.view.JSVideoView;
 
-public class MainActivity extends AppCompatActivity implements Observer {
+public class TrainActivity extends AppCompatActivity implements Observer {
     private static final String TAG = "JSActivity";
     private JSDrone mJSDrone;
 
@@ -53,7 +53,7 @@ public class MainActivity extends AppCompatActivity implements Observer {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_train);
 
         Intent intent = getIntent();
         ARDiscoveryDeviceService service = intent.getParcelableExtra(DeviceListActivity.EXTRA_DEVICE_SERVICE);

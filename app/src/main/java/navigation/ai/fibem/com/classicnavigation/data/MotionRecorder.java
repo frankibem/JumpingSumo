@@ -103,9 +103,8 @@ public class MotionRecorder {
                     motion.getTurnSpeed(), motion.getForwardSpeed());
             File file = new File(runFolder, fileName);
 
-            Mat img = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+            Mat img = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_GRAYSCALE);
             Imgproc.resize(img, img, new Size(32, 24));
-            Imgproc.cvtColor(img, img, Imgproc.COLOR_BGR2GRAY);
             Imgcodecs.imwrite(file.getAbsolutePath(), img);
             Log.i(TAG, "Wrote data: " + fileName);
         } else {
