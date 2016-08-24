@@ -98,7 +98,8 @@ public class MotionRecorder {
                 return;
             }
 
-            String fileName = String.format(Locale.US, "run%d_%d_%d_%d_%d.png", imageNumber,
+            String fileName = String.format(Locale.US, "run%d_%d_%d_%d_%d_%d.png",
+                    runNumber, imageNumber,
                     motion.getPrevTurnSpeed(), motion.getPrevForwardSpeed(),
                     motion.getTurnSpeed(), motion.getForwardSpeed());
             File file = new File(runFolder, fileName);
@@ -107,6 +108,8 @@ public class MotionRecorder {
             Imgproc.resize(img, img, new Size(32, 24));
             Imgcodecs.imwrite(file.getAbsolutePath(), img);
             Log.i(TAG, "Wrote data: " + fileName);
+
+            imageNumber++;
         } else {
             framesSkipped = (framesSkipped + 1) % framesToSkip;
         }

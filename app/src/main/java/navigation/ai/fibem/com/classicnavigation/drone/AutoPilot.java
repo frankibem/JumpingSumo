@@ -1,10 +1,14 @@
 package navigation.ai.fibem.com.classicnavigation.drone;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 
+import org.encog.app.analyst.EncogAnalyst;
+import org.encog.app.analyst.util.AnalystUtility;
 import org.encog.ml.data.MLData;
 import org.encog.ml.data.basic.BasicMLData;
-import org.encog.ml.data.versatile.NormalizationHelper;
 import org.encog.neural.networks.BasicNetwork;
 import org.encog.persist.EncogDirectoryPersistence;
 import org.opencv.core.Mat;
@@ -12,10 +16,6 @@ import org.opencv.core.MatOfByte;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInputStream;
 
 import navigation.ai.fibem.com.classicnavigation.R;
 import navigation.ai.fibem.com.classicnavigation.data.MotionData;
@@ -26,12 +26,14 @@ import navigation.ai.fibem.com.classicnavigation.data.MotionData;
 public class AutoPilot {
     private JSDrone mDrone;
     private Context mContext;
-    private PilotReadyCallback mCallback;
+    private PilotCallback mCallback;
 
     private BasicNetwork mNetwork;
-    private NormalizationHelper mNormHelper;
+    private AnalystUtility mUtil;
 
     private double[] netInput;
+    private MLData input;
+    private double[] denorm;
 
     private MotionData motionData = new MotionData();
 
@@ -46,33 +48,39 @@ public class AutoPilot {
      * @param context  Context for loading pilot information
      * @param callback Call back for drone initialization information
      */
-    public AutoPilot(JSDrone drone, Context context, PilotReadyCallback callback) {
+    public AutoPilot(JSDrone drone, Context context, PilotCallback callback) {
         mDrone = drone;
         mContext = context;
         mCallback = callback;
 
-        try {
-            loadNetworkData();
-        } catch (Exception ex) {
-            callback.onErrorInitializing(ex);
-            return;
-        }
-
-        callback.onPilotInitialized();
+        loadNetworkData();
     }
 
-    private void loadNetworkData()
-            throws IOException, ClassNotFoundException {
-        // Load the neural network
-        mNetwork = (BasicNetwork) EncogDirectoryPersistence.loadObject(mContext.getResources().
-                openRawResource(R.raw.network));
+    private void loadNetworkData() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Load the analyst and obtain the utility
+                    EncogAnalyst analyst = new EncogAnalyst();
+                    analyst.load(mContext.getResources().openRawResource(R.raw.drone));
+                    mUtil = analyst.getUtility();
 
-        netInput = new double[mNetwork.getInputCount()];
+                    // Load the neural network
+                    mNetwork = (BasicNetwork) EncogDirectoryPersistence.loadObject(mContext.getResources().
+                            openRawResource(R.raw.drone_train));
 
-        // Load the normalization helper
-        InputStream is = mContext.getResources().openRawResource(R.raw.helper);
-        ObjectInputStream objIn = new ObjectInputStream(is);
-        mNormHelper = (NormalizationHelper) objIn.readObject();
+                    netInput = new double[mNetwork.getInputCount()];
+                    input = new BasicMLData(mNetwork.getInputCount());
+                    denorm = new double[mNetwork.getOutputCount()];
+                } catch (Exception e) {
+                    mCallback.onErrorInitializing(e);
+                    return;
+                }
+
+                mCallback.onPilotInitialized();
+            }
+        }).start();
     }
 
     public void setNextFrame(byte[] frame) {
@@ -84,7 +92,8 @@ public class AutoPilot {
     /**
      * Moves the drone based on the last recorded frame and motion information
      */
-    public void move() {
+    public synchronized void move() {
+        long start = System.currentTimeMillis();
         byte[] image;
 
         synchronized (sync) {
@@ -111,21 +120,39 @@ public class AutoPilot {
         for (int i = 0; i < imgArray.length; i++)
             netInput[i + 2] = imgArray[i];
 
+        // Normalize for input to network
+        mUtil.encode(true, false, netInput, input);
+
         // Feed to network
-        MLData input = new BasicMLData(netInput);
         MLData output = mNetwork.compute(input);
 
-        // Denormalize -- Surely there has to be a better way than using strings?
-        String[] outStr = mNormHelper.denormalizeOutputVectorToString(output);
+        // Denormalize network output
+        mUtil.decode(false, true, denorm, output);
 
-        byte newTurn = (byte) (Double.parseDouble(outStr[0]));
-        byte newForward = (byte) (Double.parseDouble(outStr[1]));
+        final byte newTurn = (byte) denorm[0];
+        final byte newForward = (byte) denorm[1];
 
         // Update data or update drone directly
         mDrone.setSpeed(newForward);
         mDrone.setTurn(newTurn);
         mDrone.setFlag((byte) 1);
         motionData.updateMotion(newForward, newTurn);
+
+        long stop = System.currentTimeMillis();
+        Log.d("AutoPilot", "Move time: " + (stop - start) + "ms");
+
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                mCallback.onMotionUpdated(motionData.copy());
+            }
+        });
+    }
+
+    public synchronized void stop() {
+        mDrone.setSpeed((byte) 0);
+        mDrone.setTurn((byte) 0);
+        mDrone.setFlag((byte) 1);
     }
 
     private static byte[] toByteArray(Mat img) {
@@ -136,7 +163,7 @@ public class AutoPilot {
         return buffer;
     }
 
-    public interface PilotReadyCallback {
+    public interface PilotCallback {
         /**
          * Called to indicate that the auto pilot was successfully initialized
          */
@@ -148,5 +175,7 @@ public class AutoPilot {
          * @param ex The exception that was thrown
          */
         void onErrorInitializing(Exception ex);
+
+        void onMotionUpdated(MotionData data);
     }
 }

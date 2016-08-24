@@ -61,16 +61,11 @@ public class DeviceListActivity extends AppCompatActivity {
                     case ARDISCOVERY_PRODUCT_JS:
                     case ARDISCOVERY_PRODUCT_JS_EVO_LIGHT:
                     case ARDISCOVERY_PRODUCT_JS_EVO_RACE:
-                        intent = trainOrPilot();
+                        trainOrPilot(service);
                         break;
 
                     default:
                         Log.e(TAG, "The type " + product + " is not supported by this sample");
-                }
-
-                if (intent != null) {
-                    intent.putExtra(EXTRA_DEVICE_SERVICE, service);
-                    startActivity(intent);
                 }
             }
         });
@@ -104,7 +99,7 @@ public class DeviceListActivity extends AppCompatActivity {
      *
      * @return
      */
-    private Intent trainOrPilot() {
+    private void trainOrPilot(final ARDiscoveryDeviceService service) {
         AlertDialog.Builder builder = new AlertDialog.Builder(DeviceListActivity.this);
         builder.setMessage("What would you like to do?")
                 .setTitle("Pick an activity");
@@ -113,17 +108,21 @@ public class DeviceListActivity extends AppCompatActivity {
         builder.setPositiveButton("AutoPilot", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                intent.setClass(DeviceListActivity.this, PilotActivity.class);
+                Intent intent = new Intent(DeviceListActivity.this, PilotActivity.class);
+                intent.putExtra(EXTRA_DEVICE_SERVICE, service);
+                startActivity(intent);
             }
         });
         builder.setNegativeButton("Train", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                intent.setClass(DeviceListActivity.this, TrainActivity.class);
+                Intent intent = new Intent(DeviceListActivity.this, TrainActivity.class);
+                intent.putExtra(EXTRA_DEVICE_SERVICE, service);
+                startActivity(intent);
             }
         });
 
-        return intent;
+        builder.show();
     }
 
     private final DroneDiscoverer.Listener mDiscovererListener = new DroneDiscoverer.Listener() {

@@ -15,21 +15,22 @@ import com.parrot.arsdk.arcontroller.ARControllerCodec;
 import com.parrot.arsdk.arcontroller.ARFrame;
 import com.parrot.arsdk.ardiscovery.ARDiscoveryDeviceService;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+
 import java.util.Timer;
 import java.util.TimerTask;
 
 import navigation.ai.fibem.com.classicnavigation.R;
 import navigation.ai.fibem.com.classicnavigation.data.MotionData;
-import navigation.ai.fibem.com.classicnavigation.data.Observable;
-import navigation.ai.fibem.com.classicnavigation.data.Observer;
 import navigation.ai.fibem.com.classicnavigation.drone.AutoPilot;
 import navigation.ai.fibem.com.classicnavigation.drone.JSDrone;
 import navigation.ai.fibem.com.classicnavigation.view.JSVideoView;
 
 public class PilotActivity extends AppCompatActivity
-        implements Observer, AutoPilot.PilotReadyCallback {
+        implements AutoPilot.PilotCallback {
     private JSDrone mJSDrone;
-    private MotionData motionData;
 
     private ProgressDialog mConnectionProgressDialog;
     private JSVideoView mVideoView;
@@ -52,9 +53,6 @@ public class PilotActivity extends AppCompatActivity
         mJSDrone = new JSDrone(this, service);
         mJSDrone.addListener(mJSListener);
 
-        motionData = new MotionData();
-        motionData.addObserver(this);
-
         initControls();
     }
 
@@ -76,7 +74,17 @@ public class PilotActivity extends AppCompatActivity
         }
     }
 
-    // May need similar onResume for openCV initialization
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (!OpenCVLoader.initDebug()) {
+            Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_1_0, this, mLoaderCallback);
+        } else {
+            Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
+    }
 
     @Override
     public void onBackPressed() {
@@ -106,11 +114,14 @@ public class PilotActivity extends AppCompatActivity
                     // Stop moving
                     autoPiloting = false;
                     mStartStopBtn.setText("START");
+                    pilot.stop();
                     motionTimer.cancel();
                 } else {
                     autoPiloting = true;
                     mStartStopBtn.setText("STOP");
-                    motionTimer.schedule(motionUpdate, 0, 100);
+
+                    createTimerTask();
+                    motionTimer.schedule(motionUpdate, 0, 60);
                 }
             }
         });
@@ -153,7 +164,10 @@ public class PilotActivity extends AppCompatActivity
         @Override
         public void onFrameReceived(ARFrame frame) {
             final byte[] data = mVideoView.displayFrame(frame);
-            pilot.setNextFrame(data);
+
+            if (pilot != null && autoPiloting) {
+                pilot.setNextFrame(data);
+            }
         }
 
         @Override
@@ -181,21 +195,20 @@ public class PilotActivity extends AppCompatActivity
         }
     };
 
-    @Override
-    public void update(Observable observable) {
-        mTurnSpeedLabel.setText(Byte.toString(motionData.getTurnSpeed()));
-        mForwardSpeedLabel.setText(Byte.toString(motionData.getForwardSpeed()));
-    }
+    private Timer motionTimer;
+    private TimerTask motionUpdate;
 
-    private Timer motionTimer = new Timer("Motion Timer");
-    private TimerTask motionUpdate = new TimerTask() {
-        @Override
-        public void run() {
-            if ((pilot != null)) {
-                pilot.move();
+    private void createTimerTask() {
+        motionTimer = new Timer("MotionTimer");
+        motionUpdate = new TimerTask() {
+            @Override
+            public void run() {
+                if ((pilot != null)) {
+                    pilot.move();
+                }
             }
-        }
-    };
+        };
+    }
 
     @Override
     public void onPilotInitialized() {
@@ -207,4 +220,26 @@ public class PilotActivity extends AppCompatActivity
         Log.e("AutoPilot", ex.getMessage());
         ex.printStackTrace();
     }
+
+    @Override
+    public void onMotionUpdated(MotionData data) {
+        mTurnSpeedLabel.setText(Byte.toString(data.getTurnSpeed()));
+        mForwardSpeedLabel.setText(Byte.toString(data.getForwardSpeed()));
+    }
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS: {
+                    Log.i("OpenCV", "OpenCV loaded successfully");
+                }
+                break;
+                default: {
+                    super.onManagerConnected(status);
+                }
+                break;
+            }
+        }
+    };
 }

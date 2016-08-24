@@ -43,8 +43,8 @@ public class TrainActivity extends AppCompatActivity implements Observer {
     private TextView mForwardSpeedLabel;
     private Button mStartStopBtn;
 
-    private static final int MAX_TURN_SPEED = 30;
-    private static final int MAX_FORWARD_SPEED = 50;
+    private static final int MAX_TURN_SPEED = 10;
+    private static final int MAX_FORWARD_SPEED = 30;
 
     private MotionData motionData;
     MotionRecorder recorder;
