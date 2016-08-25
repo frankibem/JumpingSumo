@@ -34,6 +34,7 @@ public class PilotActivity extends AppCompatActivity
 
     private ProgressDialog mConnectionProgressDialog;
     private JSVideoView mVideoView;
+    private JSVideoView mdroneVideoView;
     private TextView mBatteryLabel;
     private TextView mTurnSpeedLabel;
     private TextView mForwardSpeedLabel;
@@ -102,6 +103,7 @@ public class PilotActivity extends AppCompatActivity
 
     private void initControls() {
         mVideoView = (JSVideoView) findViewById(R.id.videoView);
+        mdroneVideoView = (JSVideoView) findViewById(R.id.droneVideoView);
         mStartStopBtn = (Button) findViewById(R.id.btn_startStop);
         mBatteryLabel = (TextView) findViewById(R.id.txt_battery);
         mTurnSpeedLabel = (TextView) findViewById(R.id.txt_turnSpeed);
@@ -120,6 +122,7 @@ public class PilotActivity extends AppCompatActivity
                     autoPiloting = true;
                     mStartStopBtn.setText("STOP");
 
+                    pilot.reset();
                     createTimerTask();
                     motionTimer.schedule(motionUpdate, 0, 60);
                 }
@@ -163,11 +166,13 @@ public class PilotActivity extends AppCompatActivity
 
         @Override
         public void onFrameReceived(ARFrame frame) {
-            final byte[] data = mVideoView.displayFrame(frame);
-
+            byte[] data = frame.getByteData();
             if (pilot != null && autoPiloting) {
                 pilot.setNextFrame(data);
             }
+
+            mVideoView.displayFrame(data);
+            mdroneVideoView.displayFrame(data, true);
         }
 
         @Override

@@ -5,20 +5,18 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
-import org.encog.app.analyst.EncogAnalyst;
 import org.encog.app.analyst.util.AnalystUtility;
 import org.encog.ml.data.MLData;
 import org.encog.ml.data.basic.BasicMLData;
 import org.encog.neural.networks.BasicNetwork;
-import org.encog.persist.EncogDirectoryPersistence;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
-import navigation.ai.fibem.com.classicnavigation.R;
 import navigation.ai.fibem.com.classicnavigation.data.MotionData;
+import navigation.ai.fibem.com.classicnavigation.data.Thresholder;
 
 /**
  * Uses a neural network to control the JS Drone based on frame by frame input
@@ -31,6 +29,7 @@ public class AutoPilot {
     private BasicNetwork mNetwork;
     private AnalystUtility mUtil;
 
+    private boolean mStopped = false;
     private double[] netInput;
     private MLData input;
     private double[] denorm;
@@ -39,7 +38,11 @@ public class AutoPilot {
 
     // The next frame for pilot to process
     private byte[] nextFrame;
-    private final Object sync = new Object();
+
+    // Synchronization
+    private final Object stopSync = new Object();
+    private final Object frameSync = new Object();
+    private final Object motionSync = new Object();
 
     /**
      * Creates a new auto-pilot for the JSDrone
@@ -61,21 +64,15 @@ public class AutoPilot {
             @Override
             public void run() {
                 try {
-                    // Load the analyst and obtain the utility
-                    EncogAnalyst analyst = new EncogAnalyst();
-                    analyst.load(mContext.getResources().openRawResource(R.raw.drone));
-                    mUtil = analyst.getUtility();
-
-                    // Load the neural network
-                    mNetwork = (BasicNetwork) EncogDirectoryPersistence.loadObject(mContext.getResources().
-                            openRawResource(R.raw.drone_train));
+                    PilotNetwork pNetwork = PilotNetwork.getInstance(mContext);
+                    mNetwork = pNetwork.getNetwork();
+                    mUtil = pNetwork.getUtility();
 
                     netInput = new double[mNetwork.getInputCount()];
                     input = new BasicMLData(mNetwork.getInputCount());
                     denorm = new double[mNetwork.getOutputCount()];
                 } catch (Exception e) {
                     mCallback.onErrorInitializing(e);
-                    return;
                 }
 
                 mCallback.onPilotInitialized();
@@ -84,7 +81,7 @@ public class AutoPilot {
     }
 
     public void setNextFrame(byte[] frame) {
-        synchronized (sync) {
+        synchronized (frameSync) {
             this.nextFrame = frame;
         }
     }
@@ -92,16 +89,22 @@ public class AutoPilot {
     /**
      * Moves the drone based on the last recorded frame and motion information
      */
-    public synchronized void move() {
+    public void move() {
+        synchronized (stopSync) {
+            if (mStopped) {
+                return;
+            }
+        }
+
         long start = System.currentTimeMillis();
         byte[] image;
 
-        synchronized (sync) {
+        synchronized (frameSync) {
             image = this.nextFrame;
             this.nextFrame = null;
         }
 
-        // No motion
+        // No frame, no motion
         if (image == null) {
             mDrone.setFlag((byte) 0);
             motionData.updateMotion((byte) 0, (byte) 0);
@@ -111,6 +114,7 @@ public class AutoPilot {
         // Convert from bytes to image (and load as grayscale)
         Mat img = Imgcodecs.imdecode(new MatOfByte(image), Imgcodecs.CV_LOAD_IMAGE_GRAYSCALE);
         Imgproc.resize(img, img, new Size(32, 24));     // Resize
+        Thresholder.Threshold(img, img);                // Threshold
 
         // Convert to double array for network
         netInput[0] = motionData.getPrevTurnSpeed();
@@ -133,10 +137,12 @@ public class AutoPilot {
         final byte newForward = (byte) denorm[1];
 
         // Update data or update drone directly
-        mDrone.setSpeed(newForward);
-        mDrone.setTurn(newTurn);
-        mDrone.setFlag((byte) 1);
-        motionData.updateMotion(newForward, newTurn);
+        synchronized (motionSync) {
+            mDrone.setSpeed(newForward);
+            mDrone.setTurn(newTurn);
+            mDrone.setFlag((byte) 1);
+            motionData.updateMotion(newForward, newTurn);
+        }
 
         long stop = System.currentTimeMillis();
         Log.d("AutoPilot", "Move time: " + (stop - start) + "ms");
@@ -149,10 +155,27 @@ public class AutoPilot {
         });
     }
 
-    public synchronized void stop() {
-        mDrone.setSpeed((byte) 0);
-        mDrone.setTurn((byte) 0);
-        mDrone.setFlag((byte) 1);
+    public void stop() {
+        byte newTurn = (byte) 0;
+        byte newForward = (byte) 0;
+
+        synchronized (motionSync) {
+            mDrone.setFlag((byte) 0);
+            motionData.updateMotion(newForward, newTurn);
+        }
+
+        synchronized (stopSync) {
+            mStopped = true;
+        }
+    }
+
+    /**
+     * Change from stopped state to allow network output to influence motion
+     */
+    public void reset() {
+        synchronized (stopSync) {
+            mStopped = false;
+        }
     }
 
     private static byte[] toByteArray(Mat img) {

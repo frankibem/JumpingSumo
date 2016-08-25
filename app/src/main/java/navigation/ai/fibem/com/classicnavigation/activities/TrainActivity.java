@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.Pair;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
@@ -21,8 +22,6 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 
-import java.io.IOException;
-
 import navigation.ai.fibem.com.classicnavigation.R;
 import navigation.ai.fibem.com.classicnavigation.data.MotionData;
 import navigation.ai.fibem.com.classicnavigation.data.MotionRecorder;
@@ -31,7 +30,8 @@ import navigation.ai.fibem.com.classicnavigation.data.Observer;
 import navigation.ai.fibem.com.classicnavigation.drone.JSDrone;
 import navigation.ai.fibem.com.classicnavigation.view.JSVideoView;
 
-public class TrainActivity extends AppCompatActivity implements Observer {
+public class TrainActivity extends AppCompatActivity
+        implements Observer, MotionRecorder.QueueUpdateListener {
     private static final String TAG = "JSActivity";
     private JSDrone mJSDrone;
 
@@ -41,7 +41,11 @@ public class TrainActivity extends AppCompatActivity implements Observer {
     private TextView mBatteryLabel;
     private TextView mTurnSpeedLabel;
     private TextView mForwardSpeedLabel;
+    private TextView mRunLabel;
+    private TextView mQueuelabel;
     private Button mStartStopBtn;
+
+    private int itemCount = 0;
 
     private static final int MAX_TURN_SPEED = 10;
     private static final int MAX_FORWARD_SPEED = 30;
@@ -62,8 +66,9 @@ public class TrainActivity extends AppCompatActivity implements Observer {
         mJSDrone.addListener(mJSListener);
 
         motionData = new MotionData();
-        motionData.addObserver(this);
-        recorder = new MotionRecorder();
+        motionData.addObserver(this);           // Listen for updates to drone telemetry
+        recorder = new MotionRecorder(10);
+        recorder.addListener(this);             // Listen for updates to save progress
 
         initControls();
     }
@@ -118,18 +123,22 @@ public class TrainActivity extends AppCompatActivity implements Observer {
         mBatteryLabel = (TextView) findViewById(R.id.txt_battery);
         mTurnSpeedLabel = (TextView) findViewById(R.id.txt_turnSpeed);
         mForwardSpeedLabel = (TextView) findViewById(R.id.txt_forwardSpeed);
+        mRunLabel = (TextView) findViewById(R.id.txt_runNo);
+        mQueuelabel = (TextView) findViewById(R.id.txt_queue);
 
         mStartStopBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 if (recording) {
                     // Stop recording
+                    recorder.finishRecording();
                     recording = false;
-                    recorder.reset();
                     mStartStopBtn.setText("START");
                 } else {
+                    recorder.reset();
                     recording = true;
                     mStartStopBtn.setText("STOP");
+                    mRunLabel.setText(Integer.toString(recorder.getRunNumber()));
                 }
             }
         });
@@ -169,17 +178,14 @@ public class TrainActivity extends AppCompatActivity implements Observer {
 
         @Override
         public void onFrameReceived(ARFrame frame) {
-            final byte[] data = mVideoView.displayFrame(frame);
+            final byte[] data = frame.getByteData();
+            mVideoView.displayFrame(data);
 
             if (recording) {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            recorder.record(motionData.copy(), data);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
+                        recorder.addItem(new Pair<MotionData, byte[]>(motionData.copy(), data));
                     }
                 }).start();
             }
@@ -296,4 +302,37 @@ public class TrainActivity extends AppCompatActivity implements Observer {
             }
         }
     };
+
+    @Override
+    public void onItemAdded() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                itemCount++;
+                mQueuelabel.setText(Integer.toString(itemCount));
+            }
+        });
+    }
+
+    @Override
+    public void onItemConsumed() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                itemCount--;
+                mQueuelabel.setText(Integer.toString(itemCount));
+            }
+        });
+    }
+
+    @Override
+    public void onFinishedConsumption() {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                itemCount = 0;
+                mQueuelabel.setText(Integer.toString(itemCount));
+            }
+        });
+    }
 }

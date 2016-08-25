@@ -2,116 +2,120 @@ package navigation.ai.fibem.com.classicnavigation.data;
 
 import android.os.Environment;
 import android.util.Log;
-
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.core.Size;
-import org.opencv.imgcodecs.Imgcodecs;
-import org.opencv.imgproc.Imgproc;
+import android.util.Pair;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.Locale;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
 
 public class MotionRecorder {
     private static final String TAG = "MotionRecorder";
 
-    /**
-     * Number of frames to skip
-     */
+    private Queue<Pair<MotionData, byte[]>> queue = new ArrayDeque<>();
+    private List<QueueUpdateListener> listeners = new ArrayList<>();
+
     private int framesToSkip;
-    private int framesSkipped = 0;
-
+    private int counter;
     private int runNumber;
-    private int imageNumber = 0;
-    private boolean checkFolder = true;
-    private String runFolderName;
-    private File runFolder;
 
-    /**
-     * Create a default recorder which starts runs from 1 and skips 10 frames
-     */
-    public MotionRecorder() {
-        this(1, 10);
-    }
+    private Consumer consumer;
 
-    /**
-     * Create a recorder which starts from the specified run number
-     *
-     * @param skipCount The number of frames to skip
-     */
     public MotionRecorder(int skipCount) {
         this(1, skipCount);
     }
 
-    /**
-     * Create a recorder which starts from the specified run number
-     *
-     * @param initialRunNumber Run number to start from
-     * @param skipCount        The number of frames to skip
-     */
     public MotionRecorder(int initialRunNumber, int skipCount) {
-        this.runNumber = initialRunNumber;
+        this.runNumber = initialRunNumber - 1;
         this.framesToSkip = skipCount;
-        runFolderName = "run " + runNumber;
+        this.listeners = new ArrayList<>();
     }
 
-    /**
-     * Increments the run number and saves new data in a new folder
-     */
     public void reset() {
+        counter = 0;
         runNumber++;
-        runFolderName = "run " + runNumber;
-        imageNumber = 0;
-        checkFolder = true;
+        String runFolderName = "run " + runNumber;
+
+        // If folder doesn't exist, create
+        File external = Environment.getExternalStorageDirectory();
+        File runFolder = new File(external, runFolderName);
+        Log.i(TAG, "Writing images to folder: " + runFolder.getAbsolutePath());
+
+        if (!runFolder.exists()) {
+            runFolder.mkdir();
+        } else {
+            // Delete all files inside
+            File[] content = runFolder.listFiles();
+            for (File file : content) {
+                file.delete();
+            }
+        }
+
+        // Create and start a new consumer
+        consumer = new Consumer(this, runFolder, runNumber, listeners);
+        consumer.start();
     }
 
     /**
-     * Save the given data to the device's external storage
+     * Add an item to the queue
      *
-     * @param motion The motion of the JS drone
-     * @param data   The byte representation of the current frame
-     * @remark If the run folder already exists, its contents will be deleted and overwritten
+     * @param item The item to add
      */
-    public synchronized void record(MotionData motion, byte[] data)
-            throws IOException {
-        if (checkFolder) {
-            File external = Environment.getExternalStorageDirectory();
-            runFolder = new File(external, runFolderName);
-            Log.i(TAG, "Writing images to folder: " + runFolder.getAbsolutePath());
+    public synchronized void addItem(Pair<MotionData, byte[]> item) {
+        if (counter == 0) {
+            queue.add(item);
+            counter++;
 
-            if (runFolder.exists()) {
-                for (File file : runFolder.listFiles()) {
-                    file.delete();
-                }
-            } else {
-                if (!runFolder.mkdir()) {
-                    throw new IOException("Could not create run folder");
-                }
-            }
-            checkFolder = false;
-        }
-
-        if (framesSkipped == 0) {
-            if (data == null) {
-                Log.i("MotionRecorder", "frame data is null");
-                return;
+            synchronized (consumer) {
+                consumer.notify();
             }
 
-            String fileName = String.format(Locale.US, "run%d_%d_%d_%d_%d_%d.png",
-                    runNumber, imageNumber,
-                    motion.getPrevTurnSpeed(), motion.getPrevForwardSpeed(),
-                    motion.getTurnSpeed(), motion.getForwardSpeed());
-            File file = new File(runFolder, fileName);
-
-            Mat img = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_GRAYSCALE);
-            Imgproc.resize(img, img, new Size(32, 24));
-            Imgcodecs.imwrite(file.getAbsolutePath(), img);
-            Log.i(TAG, "Wrote data: " + fileName);
-
-            imageNumber++;
+            // Notify listeners
+            for (QueueUpdateListener listener : listeners) {
+                listener.onItemAdded();
+            }
         } else {
-            framesSkipped = (framesSkipped + 1) % framesToSkip;
+            if (framesToSkip <= 0) {
+                // Negative number or 0, ignore (take all frames)
+            } else if (counter == framesToSkip) {
+                counter = 0;
+            } else {
+                counter++;
+            }
         }
+    }
+
+    /**
+     * @return Returns the next item in the queue
+     */
+    public synchronized Pair<MotionData, byte[]> getItem() {
+        return queue.poll();
+    }
+
+    /**
+     * No more items will be produced. Consume all remaining and terminate
+     */
+    public void finishRecording() {
+        synchronized (consumer) {
+            consumer.wrapUp();
+            consumer.notify();
+        }
+    }
+
+    public interface QueueUpdateListener {
+        void onItemAdded();
+
+        void onItemConsumed();
+
+        void onFinishedConsumption();
+    }
+
+    public void addListener(QueueUpdateListener listener) {
+        listeners.add(listener);
+    }
+
+    public int getRunNumber() {
+        return runNumber;
     }
 }

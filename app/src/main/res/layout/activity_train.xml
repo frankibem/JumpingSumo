@@ -34,10 +34,44 @@
             tools:text="50%" />
 
         <TextView
-            android:id="@+id/label_turnSpeed"
+            android:id="@+id/label_run"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_below="@id/label_battery"
+            android:text="Run: "
+            android:textColor="@color/primary_text" />
+
+        <TextView
+            android:id="@+id/txt_runNo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_battery"
+            android:layout_toRightOf="@id/label_run"
+            android:textColor="@color/primary_text"
+            tools:text="3" />
+
+        <TextView
+            android:id="@+id/label_queue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_run"
+            android:text="In queue: "
+            android:textColor="@color/primary_text" />
+
+        <TextView
+            android:id="@+id/txt_queue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_run"
+            android:layout_toRightOf="@id/label_queue"
+            android:textColor="@color/primary_text"
+            tools:text="42" />
+
+        <TextView
+            android:id="@+id/label_turnSpeed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/label_queue"
             android:text="Turn speed: "
             android:textColor="@color/primary_text" />
 
@@ -45,10 +79,10 @@
             android:id="@+id/txt_turnSpeed"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_below="@id/label_battery"
+            android:layout_below="@id/label_queue"
             android:layout_toRightOf="@id/label_turnSpeed"
             android:textColor="@color/primary_text"
-            tools:text="43" />
+            tools:text="6" />
 
         <TextView
             android:id="@+id/label_forwardSpeed"
