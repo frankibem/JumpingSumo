@@ -124,7 +124,7 @@ public class PilotActivity extends AppCompatActivity
 
                     pilot.reset();
                     createTimerTask();
-                    motionTimer.schedule(motionUpdate, 0, 60);
+                    motionTimer.schedule(motionUpdate, 0, 40);
                 }
             }
         });

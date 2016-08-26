@@ -67,7 +67,7 @@ public class TrainActivity extends AppCompatActivity
 
         motionData = new MotionData();
         motionData.addObserver(this);           // Listen for updates to drone telemetry
-        recorder = new MotionRecorder(10);
+        recorder = new MotionRecorder(1);
         recorder.addListener(this);             // Listen for updates to save progress
 
         initControls();

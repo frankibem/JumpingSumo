@@ -104,10 +104,17 @@ public class AutoPilot {
             this.nextFrame = null;
         }
 
-        // No frame, no motion
+        // No frame, dampen previous motion
         if (image == null) {
-            mDrone.setFlag((byte) 0);
-            motionData.updateMotion((byte) 0, (byte) 0);
+            byte newTurn = (byte) (motionData.getPrevTurnSpeed() / 2);
+            byte newForward = (byte) (motionData.getPrevForwardSpeed() / 2);
+
+            synchronized (motionSync) {
+                mDrone.setSpeed(newForward);
+                mDrone.setTurn(newTurn);
+                mDrone.setFlag((byte) 1);
+                motionData.updateMotion(newForward, newTurn);
+            }
             return;
         }
 
@@ -135,6 +142,12 @@ public class AutoPilot {
 
         final byte newTurn = (byte) denorm[0];
         final byte newForward = (byte) denorm[1];
+
+        synchronized (stopSync) {
+            if (mStopped) {
+                return;
+            }
+        }
 
         // Update data or update drone directly
         synchronized (motionSync) {
